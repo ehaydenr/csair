@@ -1,173 +1,128 @@
 package main
 
 import (
-	"fmt"
-	"strings"
+	"encoding/json"
+	graphlib "github.com/ehaydenr/algorithms/graph"
+	"io/ioutil"
 )
 
 type Network struct {
-	Cities      []string
 	Airports    map[string]Airport
 	FlightPaths []FlightPath
+	graph       *graphlib.Graph
+	nodeMap     map[string]*graphlib.Vertex
 }
 
-// Return list of continents
-func (network Network) computeListOfContinents() []string {
-	continents := make([]string, 0, 7)
-	continentMap := network.computeAirportContinentResidency()
-	for continent, _ := range continentMap {
-		continents = append(continents, continent)
+// Constructor
+func NewNetwork() *Network {
+	data, err := ioutil.ReadFile("res/map_data.json")
+	if err != nil {
+		panic(err)
 	}
-	return continents
+
+	config := Configuration{}
+
+	if err := json.Unmarshal(data, &config); err != nil {
+		panic(err)
+	}
+
+	net := &Network{}
+
+	airportMap := make(map[string]Airport)
+	for _, airport := range config.Airports {
+		airportMap[airport.Code] = airport
+	}
+
+	net.Airports = airportMap
+	net.FlightPaths = config.FlightPaths
+	net.buildGraph()
+
+	return net
 }
 
-// Return flight paths from airport
-func (network Network) computeNonstopFlights(code string) ([]FlightPath, error) {
-	if _, ok := network.Airports[code]; !ok {
-		return nil, NoSuchAirportError("Airport doesn't exist.")
+// Merge JSON
+func (network *Network) MergeJSON(config Configuration) {
+	for _, airport := range config.Airports {
+		network.Airports[airport.Code] = airport
+	}
+	for _, path := range config.FlightPaths {
+		network.FlightPaths = append(network.FlightPaths, path)
+	}
+	network.buildGraph()
+}
+
+// Generate resources from Airport and Flightpath Data
+func (network *Network) buildGraph() {
+	graph := make(graphlib.Graph, len(network.Airports))
+	nodeMap := make(map[string]*graphlib.Vertex)
+
+	i := 0
+	for code := range network.Airports {
+		graph[i] = &graphlib.Vertex{
+			Id:        i,
+			Value:     code,
+			Neighbors: make([]graphlib.Neighbor, 0),
+		}
+
+		nodeMap[code] = graph[i]
+		i++
 	}
 
-	flightPaths := make([]FlightPath, 0)
 	for _, path := range network.FlightPaths {
-		if path.Ports[0] == code || path.Ports[1] == code {
-			flightPaths = append(flightPaths, path)
-		}
+		v1 := nodeMap[path.Ports[0]]
+		v2 := nodeMap[path.Ports[1]]
+		v1.Neighbors = append(v1.Neighbors, graphlib.Neighbor{v2, path.Distance})
+		v2.Neighbors = append(v2.Neighbors, graphlib.Neighbor{v1, path.Distance})
 	}
-	return flightPaths, nil
+
+	network.graph = &graph
+	network.nodeMap = nodeMap
 }
 
-// Return the longest flight in the network
-// Returns path
-func (network Network) computeLongestFlight() FlightPath {
-	var longest FlightPath
+// Remove City
+func (network *Network) removeCity(code string) {
+	// Remove city from airport map
+	delete(network.Airports, code)
+
+	// Remove Flight Paths
+	newPaths := make([]FlightPath, 0, len(network.FlightPaths))
 	for _, path := range network.FlightPaths {
-		if path.Distance > longest.Distance {
-			longest = path
+		if path.Ports[0] != code || path.Ports[1] != code {
+			newPaths = append(newPaths, path)
 		}
 	}
-	return longest
+	network.FlightPaths = newPaths
+
+	// Could be more optimized by not deleting everything, but let's just rebuild for now.
+	network.buildGraph()
 }
 
-// Compute shortest flight in network
-// Returns codes of the two airports
-func (network Network) computeShortestFlight() FlightPath {
-	var shortest = FlightPath{
-		nil,
-		MaxInt,
-	}
-	for _, path := range network.FlightPaths {
-		if path.Distance < shortest.Distance {
-			shortest = path
+// Add City
+func (network *Network) addCity(airport Airport) {
+	network.Airports[airport.Code] = airport
+	network.buildGraph()
+}
+
+// Update City
+func (network *Network) updateCity(airport Airport) {
+	network.Airports[airport.Code] = airport
+	network.buildGraph()
+}
+
+// Remove Route
+func (network *Network) removeRoute(port1, port2 string) {
+	newFlightPaths := make([]FlightPath, 0, len(network.FlightPaths))
+	for _, fp := range network.FlightPaths {
+		if fp.Ports[0] != port1 && fp.Ports[1] != port2 {
+			newFlightPaths = append(newFlightPaths, fp)
 		}
 	}
-	return shortest
+	network.FlightPaths = newFlightPaths
+	network.buildGraph()
 }
 
-// Compute average distance of all the flights in the network
-// Return average
-func (network Network) computeAverageDistance() int {
-	sum, denom := 0, 0
-
-	for _, path := range network.FlightPaths {
-		sum += path.Distance
-		denom++
-	}
-
-	return int(float32(sum) / float32(denom))
-}
-
-// Compute biggest city by population
-// Return code for the airport
-func (network Network) computeBiggestCity() string {
-	var biggest Airport
-
-	for _, airport := range network.Airports {
-		if airport.Population > biggest.Population {
-			biggest = airport
-		}
-	}
-
-	return biggest.Code
-}
-
-// Compute smallest city by population
-// Return code for the airport
-func (network Network) computeSmallestCity() string {
-	smallest := Airport{
-		Population: MaxInt,
-	}
-
-	for _, airport := range network.Airports {
-		if airport.Population < smallest.Population {
-			smallest = airport
-		}
-	}
-
-	return smallest.Code
-}
-
-// Compute average city population
-// Return average
-func (network Network) computeAveragePopulation() int {
-	sum, denom := 0, 0
-
-	for _, airport := range network.Airports {
-		sum += airport.Population
-		denom++
-	}
-
-	return int(float32(sum) / float32(denom))
-}
-
-// Compute list of continents and the cities in them
-// Return map of continents to airport codes
-func (network Network) computeAirportContinentResidency() map[string][]string {
-	continentMap := make(map[string][]string)
-	for _, airport := range network.Airports {
-		continent := airport.Continent
-
-		if list, ok := continentMap[continent]; !ok {
-			newList := []string{airport.Code}
-			continentMap[continent] = newList
-		} else {
-			continentMap[continent] = append(list, airport.Code)
-		}
-
-	}
-	return continentMap
-}
-
-// Compute hub cities - cities with most connections
-// Return list of airport codes
-func (network Network) computeHubCities() []string {
-	ocurrenceMap := make(map[string]int)
-	for _, path := range network.FlightPaths {
-		ocurrenceMap[path.Ports[0]]++
-		ocurrenceMap[path.Ports[1]]++
-	}
-
-	max := 0
-	for _, count := range ocurrenceMap {
-		if max < count {
-			max = count
-		}
-	}
-
-	finalList := make([]string, 0, len(network.Airports))
-	for code, count := range ocurrenceMap {
-		if count == max {
-			finalList = append(finalList, code)
-		}
-	}
-
-	return finalList
-}
-
-// Compute map url
-func (network Network) computeMapUrl() string {
-	locations := make([]string, len(network.FlightPaths))
-	for i, path := range network.FlightPaths {
-		locations[i] = fmt.Sprintf("%s-%s", path.Ports[0], path.Ports[1])
-	}
-	return fmt.Sprintf("%s%s", UrlPrefix, strings.Join(locations, ","))
+// Add Route
+func (network *Network) addRoute(fp FlightPath) {
+	network.FlightPaths = append(network.FlightPaths, fp)
+	network.buildGraph()
 }

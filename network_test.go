@@ -6,22 +6,6 @@ import (
 	"testing"
 )
 
-func TestListOfCities(t *testing.T) {
-	answer := []string{
-		"SCL", "LIM", "MEX", "BOG", "BUE", "SAO", "LOS", "FIH", "JNB", "KRT", "CAI",
-		"ALG", "MAD", "LON", "PAR", "MIL", "ESS", "LED", "MOW", "IST", "BGW", "THR",
-		"RUH", "KHI", "DEL", "BOM", "MAA", "CCU", "BKK", "HKG", "SHA", "PEK", "ICN",
-		"TYO", "OSA", "TPE", "MNL", "SGN", "JKT", "SYD", "LAX", "SFO", "CHI", "ATL",
-		"MIA", "WAS", "NYC", "YYZ",
-	}
-
-	proposal := network.Cities
-
-	if !reflect.DeepEqual(answer, proposal) {
-		t.Fail()
-	}
-}
-
 func TestLongestFlight(t *testing.T) {
 	//{[SYD LAX] 12051}
 	answer := FlightPath{
@@ -135,6 +119,18 @@ func TestMapUrl(t *testing.T) {
 
 	proposal := network.computeMapUrl()
 	if answer != proposal {
+		t.Fail()
+	}
+}
+
+func TestShortestRoute(t *testing.T) {
+	// [ATL CHI SFO TYO]
+	answer := []string{
+		"ATL", "CHI", "SFO", "TYO",
+	}
+	proposal := network.computeShortestRoute("ATL", "TYO")
+
+	if !reflect.DeepEqual(answer, proposal) {
 		t.Fail()
 	}
 }
