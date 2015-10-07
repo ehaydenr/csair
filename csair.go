@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -15,11 +18,34 @@ type Configuration struct {
 	FlightPaths []FlightPath `json:"routes"`
 }
 
+// Save to Disk
+func save(args []string) {
+	var config Configuration
+	config.Datasources = network.Datasources
+	config.Airports = make([]Airport, 0, len(network.Airports))
+	for _, airport := range network.Airports {
+		config.Airports = append(config.Airports, airport)
+	}
+	config.FlightPaths = network.FlightPaths
+	j, _ := json.Marshal(config)
+	ioutil.WriteFile("res/save.json", j, 0644)
+}
+
+// Load from Disk
+func load(args []string) {
+	path := fmt.Sprintf("res/%s.json", args[0])
+	network = NewNetwork(path)
+}
+
 // Help
 func help(args []string) {
+	commands := make([]string, 0, len(commandMap))
 	for command, _ := range commandMap {
-		fmt.Println(command)
+		commands = append(commands, command)
 	}
+	sort.Strings(commands)
+
+	fmt.Println(strings.Join(commands, "\n"))
 }
 
 // Exit
@@ -54,11 +80,13 @@ func init() {
 		"removeRoute":       removeRoute,
 		"addRoute":          addRoute,
 		"merge":             mergeJSON,
+		"save":              save,
+		"load":              load,
 		"exit":              exit,
 		"help":              help,
 	}
 
-	network = NewNetwork()
+	network = NewNetwork("res/map_data.json")
 }
 
 // Main

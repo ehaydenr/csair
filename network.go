@@ -7,6 +7,7 @@ import (
 )
 
 type Network struct {
+	Datasources []string
 	Airports    map[string]Airport
 	FlightPaths []FlightPath
 	graph       *graphlib.Graph
@@ -14,8 +15,8 @@ type Network struct {
 }
 
 // Constructor
-func NewNetwork() *Network {
-	data, err := ioutil.ReadFile("res/map_data.json")
+func NewNetwork(path string) *Network {
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		panic(err)
 	}
@@ -35,6 +36,7 @@ func NewNetwork() *Network {
 
 	net.Airports = airportMap
 	net.FlightPaths = config.FlightPaths
+	net.Datasources = config.Datasources
 	net.buildGraph()
 
 	return net
@@ -48,6 +50,17 @@ func (network *Network) MergeJSON(config Configuration) {
 	for _, path := range config.FlightPaths {
 		network.FlightPaths = append(network.FlightPaths, path)
 	}
+
+DatasourceLoop:
+	for _, datasource := range config.Datasources {
+		for _, ds := range network.Datasources {
+			if ds == datasource {
+				continue DatasourceLoop
+			}
+		}
+		network.Datasources = append(network.Datasources, datasource)
+	}
+
 	network.buildGraph()
 }
 
@@ -87,7 +100,7 @@ func (network *Network) removeCity(code string) {
 	// Remove Flight Paths
 	newPaths := make([]FlightPath, 0, len(network.FlightPaths))
 	for _, path := range network.FlightPaths {
-		if path.Ports[0] != code || path.Ports[1] != code {
+		if path.Ports[0] != code && path.Ports[1] != code {
 			newPaths = append(newPaths, path)
 		}
 	}
