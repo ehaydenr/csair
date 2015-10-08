@@ -82,6 +82,7 @@ func init() {
 		"merge":             mergeJSON,
 		"save":              save,
 		"load":              load,
+		"stats":             routeStatistics,
 		"exit":              exit,
 		"help":              help,
 	}

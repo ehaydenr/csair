@@ -121,3 +121,9 @@ func mergeJSON(args []string) {
 
 	network.MergeJSON(config)
 }
+
+// Get Route statistics
+func routeStatistics(args []string) {
+	stats, _ := network.computeRouteStatistics(args)
+	fmt.Println(stats)
+}

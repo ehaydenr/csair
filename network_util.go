@@ -1,10 +1,18 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	graphlib "github.com/ehaydenr/algorithms/graph"
+	"math"
 	"strings"
 )
+
+type RouteStats struct {
+	Distance int
+	Cost     float32
+	Time     float32
+}
 
 // Compute shortest route between two cities
 func (network Network) computeShortestRoute(origin, destination string) []string {
@@ -197,4 +205,72 @@ func (network Network) computeMapUrl() string {
 		locations[i] = fmt.Sprintf("%s-%s", path.Ports[0], path.Ports[1])
 	}
 	return fmt.Sprintf("%s%s", UrlPrefix, strings.Join(locations, ","))
+}
+
+// Compute Route Statistics
+func (network Network) computeRouteStatistics(args []string) (RouteStats, error) {
+	dist, cost, time := 0, float32(0), float32(0)
+	costMultiplier := float32(0.35)
+
+	for i := 0; i < len(args)-1; i++ {
+
+		// Distance
+		dist_t, err := network.computeDistance(args[i], args[i+1])
+		if err != nil {
+			return RouteStats{}, err
+		}
+		dist += dist_t
+
+		// Time
+		time_t := network.computeDistTime(dist_t)
+		if err != nil {
+			return RouteStats{}, err
+		}
+		time += time_t
+
+		if i != 0 {
+			outbound, _ := network.computeNonstopFlights(args[i])
+			layover := float32(2) - float32(len(outbound))*float32(1.0/6.0)
+			time += layover
+		}
+
+		// Cost
+		cost += costMultiplier * float32(dist_t)
+		if costMultiplier > 0 {
+			costMultiplier -= 0.05
+		}
+	}
+	return RouteStats{dist, cost, time}, nil
+}
+
+// Get distance between cities
+func (network Network) computeDistance(c1, c2 string) (int, error) {
+	for _, neighbor := range network.nodeMap[c1].Neighbors {
+		if neighbor.Node.Value.(string) == c2 {
+			return neighbor.Length, nil
+		}
+	}
+	return -1, errors.New("Invalid Flight Path")
+}
+
+// Compute time to go a distance in airplane
+func (network Network) computeDistTime(dist int) float32 {
+	time := float32(0)
+	acceleration := float32(1406.25)
+
+	if dist < 400 { // Compute uniform accel and decel
+		half := float32(dist) / float32(2)
+
+		t := math.Sqrt(float64(2 * half / acceleration))
+
+		time += float32(2 * t)
+
+	} else {
+		time += 16.0 / 15.0 // Time to accel and decel
+		dist -= 400
+
+		time += float32(dist) / float32(750)
+	}
+
+	return time
 }
